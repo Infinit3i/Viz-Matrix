@@ -34,6 +34,7 @@ const infraOptions = [
 // Three states: off → selected → crown jewel → off
 const selected = ref<Set<string>>(new Set())
 const crownJewels = ref<Set<string>>(new Set())
+const mobileOpen = ref(false)
 
 const categoryMap: Record<string, string[]> = {
   windows: ['windows'],
@@ -65,16 +66,13 @@ function toggle(value: string) {
   const cj = new Set(crownJewels.value)
 
   if (!sel.has(value)) {
-    // Off → selected
     sel.add(value)
     if (categoryMap[value]) {
       emit('expandCategories', categoryMap[value])
     }
   } else if (!cj.has(value)) {
-    // Selected → crown jewel
     cj.add(value)
   } else {
-    // Crown jewel → off
     sel.delete(value)
     cj.delete(value)
   }
@@ -122,6 +120,8 @@ function emitCrownJewels() {
   emit('crownJewelTechniques', crownSourceIds)
 }
 
+const selectedCount = () => selected.value.size
+
 const sections = [
   { label: 'We run', options: osOptions },
   { label: 'Identity', options: identityOptions },
@@ -131,7 +131,8 @@ const sections = [
 </script>
 
 <template>
-  <div class="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+  <!-- Desktop: inline pills -->
+  <div class="hidden lg:flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
     <div
       v-for="section in sections"
       :key="section.label"
@@ -155,6 +156,40 @@ const sections = [
         <span v-if="crownJewels.has(opt.value)" class="text-amber-400 text-[9px]">&#9813;</span>
         {{ opt.label }}
       </button>
+    </div>
+  </div>
+
+  <!-- Mobile: collapsible dropdown -->
+  <div class="lg:hidden">
+    <button
+      class="w-full flex items-center justify-between px-3 py-1.5 rounded-md bg-zinc-800/80 border border-zinc-700/50 text-xs text-zinc-300"
+      @click="mobileOpen = !mobileOpen"
+    >
+      <span>Environment <span class="text-zinc-500">({{ selectedCount() }} selected)</span></span>
+      <span class="text-[10px] font-mono text-zinc-500">{{ mobileOpen ? '&#9650;' : '&#9660;' }}</span>
+    </button>
+    <div v-if="mobileOpen" class="mt-1.5 flex flex-col gap-2 p-2 rounded-md bg-zinc-900 border border-zinc-800">
+      <div v-for="section in sections" :key="section.label">
+        <span class="text-[9px] font-semibold uppercase tracking-wider text-zinc-500 mb-1 block">
+          {{ section.label }}
+        </span>
+        <div class="flex flex-wrap gap-1">
+          <button
+            v-for="opt in section.options"
+            :key="opt.value"
+            class="text-[10px] px-1.5 py-0.5 rounded border transition-all flex items-center gap-0.5"
+            :class="crownJewels.has(opt.value)
+              ? 'bg-amber-950/60 border-amber-500 text-amber-200'
+              : selected.has(opt.value)
+                ? 'bg-zinc-700 border-zinc-500 text-zinc-100'
+                : 'bg-zinc-900 border-zinc-800 text-zinc-500'"
+            @click="toggle(opt.value)"
+          >
+            <span v-if="crownJewels.has(opt.value)" class="text-amber-400 text-[8px]">&#9813;</span>
+            {{ opt.label }}
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>

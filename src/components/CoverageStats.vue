@@ -29,7 +29,7 @@ const pct = computed(() => total.value > 0 ? Math.round((covered.value / total.v
     <span class="font-mono font-bold text-lg" :class="pct < 33 ? 'text-red-400' : pct < 66 ? 'text-amber-400' : 'text-emerald-400'">
       {{ pct }}%
     </span>
-    <div class="w-96 h-2 bg-zinc-800 rounded-full overflow-hidden">
+    <div class="w-48 lg:w-96 h-2 bg-zinc-800 rounded-full overflow-hidden">
       <div
         class="h-full rounded-full transition-all duration-300"
         :style="{

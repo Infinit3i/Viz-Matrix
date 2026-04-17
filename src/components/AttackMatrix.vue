@@ -140,12 +140,32 @@ function onCellLeave() {
 const maxTechniques = computed(() =>
   Math.max(...tactics.map(t => t.techniques.length))
 )
+
+const sidebarOpen = ref(false)
 </script>
 
 <template>
-  <div class="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
+  <div class="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden relative">
+    <!-- Mobile sidebar toggle -->
+    <button
+      class="fixed top-3 left-3 z-50 lg:hidden w-8 h-8 flex items-center justify-center rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
+      @click="sidebarOpen = !sidebarOpen"
+    >
+      <span class="text-sm">{{ sidebarOpen ? '&times;' : '&#9776;' }}</span>
+    </button>
+
+    <!-- Sidebar backdrop (mobile) -->
+    <div
+      v-if="sidebarOpen"
+      class="fixed inset-0 z-30 bg-black/50 lg:hidden"
+      @click="sidebarOpen = false"
+    />
+
     <!-- Sidebar -->
-    <aside class="w-64 shrink-0 border-r border-zinc-800 bg-zinc-950/80 p-4 overflow-hidden flex flex-col">
+    <aside
+      class="w-64 shrink-0 border-r border-zinc-800 bg-zinc-950 p-4 overflow-hidden flex flex-col z-40 fixed inset-y-0 left-0 transition-transform duration-200 lg:relative lg:translate-x-0"
+      :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+    >
       <SourcetypePanel
         ref="sourcetypePanelRef"
         :sourcetypes="sourcetypes"
@@ -158,14 +178,29 @@ const maxTechniques = computed(() =>
         @hover-source="(id: string) => hoveredSourceId = id"
         @leave-source="hoveredSourceId = null"
       />
+      <!-- Mobile recommendations -->
+      <div v-if="inScopeTechniqueIds.size > 0" class="lg:hidden border-t border-zinc-800 mt-3 pt-3 shrink-0">
+        <Recommendations
+          :active-sources="activeSources"
+          :in-scope-ids="inScopeTechniqueIds"
+          :active-env-categories="activeEnvCategories"
+          :crown-jewel-ids="crownJewelTechniqueIds"
+          @enable="toggleSource"
+          @hover-source="(id: string) => hoveredSourceId = id"
+          @leave-source="hoveredSourceId = null"
+        />
+      </div>
     </aside>
 
     <!-- Main content -->
     <main class="flex-1 flex flex-col overflow-hidden">
       <!-- Header -->
-      <header class="shrink-0 border-b border-zinc-800 px-6 py-3">
-        <div class="flex items-center mb-2">
-          <div class="shrink-0">
+      <header class="shrink-0 border-b border-zinc-800 px-3 lg:px-6 py-3">
+        <!-- Desktop: row layout / Mobile: stacked -->
+        <div class="flex flex-col lg:flex-row lg:items-center gap-2 mb-2">
+          <div class="shrink-0 flex items-center gap-3">
+            <!-- Spacer for hamburger on mobile -->
+            <div class="w-8 lg:hidden" />
             <h1 class="text-lg font-semibold tracking-tight">
               <span class="text-zinc-500">Viz-</span><span class="text-zinc-100">Matrix</span>
             </h1>
@@ -173,7 +208,7 @@ const maxTechniques = computed(() =>
           <div class="flex-1 flex justify-center">
             <CoverageStats :active-sources="activeSources" :in-scope-ids="inScopeTechniqueIds" />
           </div>
-          <div class="shrink-0 flex items-center gap-4 text-xs">
+          <div class="shrink-0 flex items-center justify-center lg:justify-end gap-4 text-xs">
             <div class="flex items-center gap-1.5">
               <span class="w-2 h-2 rounded-full bg-emerald-500" />
               <span class="text-zinc-400">Covered</span>
@@ -194,7 +229,7 @@ const maxTechniques = computed(() =>
             @crown-jewel-techniques="(ids: Set<string>) => crownJewelSourceIds = ids"
           />
         </div>
-        <div v-if="inScopeTechniqueIds.size > 0" class="border-t border-zinc-800/60 mt-2 pt-2">
+        <div v-if="inScopeTechniqueIds.size > 0" class="hidden lg:block border-t border-zinc-800/60 mt-2 pt-2">
           <Recommendations
             :active-sources="activeSources"
             :in-scope-ids="inScopeTechniqueIds"
@@ -208,21 +243,21 @@ const maxTechniques = computed(() =>
       </header>
 
       <!-- Matrix grid -->
-      <div class="flex-1 overflow-auto p-4">
+      <div class="flex-1 overflow-auto p-1 lg:p-4">
         <div
           class="grid gap-px min-w-fit"
           :style="{
-            gridTemplateColumns: `repeat(${tactics.length}, minmax(80px, 1fr))`,
+            gridTemplateColumns: `repeat(${tactics.length}, minmax(45px, 1fr))`,
           }"
         >
           <!-- Tactic headers -->
           <div
             v-for="tactic in sortedTactics"
             :key="tactic.id"
-            class="px-1 py-2 text-center border-b border-zinc-800"
+            class="px-0.5 lg:px-1 py-1 lg:py-2 text-center border-b border-zinc-800"
           >
-            <div class="text-[10px] font-mono text-zinc-600 mb-0.5">{{ tactic.id }}</div>
-            <div class="text-[11px] font-semibold text-zinc-300 leading-tight">{{ tactic.shortName }}</div>
+            <div class="hidden lg:block text-[10px] font-mono text-zinc-600 mb-0.5">{{ tactic.id }}</div>
+            <div class="text-[8px] lg:text-[11px] font-semibold text-zinc-300 leading-tight">{{ tactic.shortName }}</div>
           </div>
 
           <!-- Technique columns -->
@@ -253,15 +288,14 @@ const maxTechniques = computed(() =>
             <div
               v-for="n in maxTechniques - tactic.techniques.length"
               :key="'spacer-' + n"
-              class="w-full"
-              :style="{ height: '28px' }"
+              class="w-full h-[14px] lg:h-[28px]"
             />
           </div>
         </div>
       </div>
 
       <!-- Legend bar -->
-      <footer class="shrink-0 border-t border-zinc-800 px-6 py-2 flex items-center justify-between">
+      <footer class="hidden lg:flex shrink-0 border-t border-zinc-800 px-6 py-2 items-center justify-between">
         <div class="flex items-center gap-4 text-[10px] text-zinc-500">
           <div class="flex items-center gap-1">
             <span class="w-3 h-3 rounded-sm" style="background: rgba(220, 50, 40, 0.85)" />

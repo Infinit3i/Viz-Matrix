@@ -119,12 +119,11 @@ function onClick() {
 
 <template>
   <div
-    class="cell-hover relative rounded-sm overflow-hidden"
+    class="cell-hover relative rounded-sm overflow-hidden h-[14px] lg:h-[28px]"
     :class="isBlindSpot ? 'cursor-pointer' : 'cursor-default'"
     :style="{
       width: '100%',
-      height: '28px',
-      minWidth: '12px',
+      minWidth: '8px',
       outline: isHighlighted ? `2px solid ${highlightColor}`
         : isCrownBlindSpot ? '2px solid rgba(245, 158, 11, 0.8)'
         : isCrownJewel && inScope ? '1px solid rgba(245, 158, 11, 0.35)'
