@@ -6,6 +6,7 @@ import { sourcetypes, type Sourcetype } from '../data/sourcetypes'
 const props = defineProps<{
   activeSources: Sourcetype[]
   inScopeIds: Set<string>
+  activeEnvCategories: Set<string>
 }>()
 
 const allTechniqueIds = computed(() => {
@@ -26,10 +27,18 @@ interface Recommendation {
 
 const recommendations = computed<Recommendation[]>(() => {
   const hasEdr = props.activeSources.some(s => s.category === 'edr')
+
+  const activeOsList = [...props.activeEnvCategories].filter(c => ['windows', 'linux', 'macos'].includes(c))
+
   const inactive = sourcetypes.filter(s => {
     if (props.activeSources.some(a => a.id === s.id)) return false
-    // Don't recommend another EDR if one is already active
     if (hasEdr && s.category === 'edr') return false
+    // Only recommend sourcetypes whose category is in the user's environment
+    if (props.activeEnvCategories.size > 0 && !props.activeEnvCategories.has(s.category)) return false
+    // If sourcetype declares specific platforms, at least one must be in the user's active OS list
+    if (s.platforms && s.platforms.length > 0 && activeOsList.length > 0) {
+      if (!s.platforms.some(p => activeOsList.includes(p))) return false
+    }
     return true
   })
 

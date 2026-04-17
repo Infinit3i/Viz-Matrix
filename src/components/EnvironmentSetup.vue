@@ -5,9 +5,9 @@ import { ref } from 'vue'
 // Each maps to all sourcetypes that COULD provide visibility into that infrastructure.
 
 const osOptions = [
-  { label: 'Windows', value: 'windows', sourceIds: ['win-security', 'sysmon', 'edr-crowdstrike', 'edr-defender', 'edr-sentinelone', 'edr-carbonblack', 'edr-cortex', 'win-powershell'] },
-  { label: 'Linux', value: 'linux', sourceIds: ['linux-auditd', 'edr-crowdstrike', 'edr-defender', 'edr-sentinelone', 'edr-carbonblack', 'edr-cortex'] },
-  { label: 'macOS', value: 'macos', sourceIds: ['macos-unified', 'edr-crowdstrike', 'edr-defender', 'edr-sentinelone', 'edr-carbonblack', 'edr-cortex'] },
+  { label: 'Windows', value: 'windows', sourceIds: ['win-security', 'sysmon', 'win-powershell', 'win-wmi', 'edr-crowdstrike', 'edr-defender', 'edr-sentinelone', 'edr-carbonblack', 'edr-cortex'] },
+  { label: 'Linux', value: 'linux', sourceIds: ['linux-auditd', 'linux-sysmon', 'linux-journald', 'edr-crowdstrike', 'edr-defender', 'edr-sentinelone', 'edr-carbonblack', 'edr-cortex'] },
+  { label: 'macOS', value: 'macos', sourceIds: ['macos-unified', 'macos-esf', 'edr-crowdstrike', 'edr-defender', 'edr-sentinelone', 'edr-carbonblack', 'edr-cortex'] },
 ]
 
 const identityOptions = [
@@ -27,20 +27,63 @@ const infraOptions = [
   { label: 'Databases', value: 'databases', sourceIds: ['database-audit'] },
   { label: 'Containers / K8s', value: 'containers', sourceIds: ['container-logs'] },
   { label: 'Network', value: 'network', sourceIds: ['firewall', 'ids-ips', 'dns', 'proxy', 'netflow', 'pcap'] },
+  { label: 'CI/CD Pipelines', value: 'cicd', sourceIds: ['github-audit', 'gitlab-audit', 'jenkins-logs', 'container-registry'] },
+  { label: 'SaaS Apps', value: 'saas', sourceIds: ['o365-unified', 'google-workspace', 'slack-audit', 'zoom-logs', 'salesforce-audit', 'servicenow-audit'] },
 ]
 
 const selected = ref<Set<string>>(new Set())
 
+// Map environment values → sidebar categories to expand
+const categoryMap: Record<string, string[]> = {
+  windows: ['windows'],
+  linux: ['linux'],
+  macos: ['macos'],
+  ad: ['identity'],
+  entra: ['identity'],
+  aws: ['cloud'],
+  azure: ['cloud'],
+  gcp: ['cloud'],
+  email: ['email'],
+  webapps: ['application'],
+  databases: ['application'],
+  containers: ['application'],
+  network: ['network'],
+  cicd: ['cicd'],
+  saas: ['saas'],
+}
+
 const emit = defineEmits<{
   apply: [sourceIds: string[]]
+  expandCategories: [categories: string[]]
+  activeCategories: [categories: string[]]
 }>()
 
 function toggle(value: string) {
   const next = new Set(selected.value)
-  if (next.has(value)) next.delete(value)
+  const wasActive = next.has(value)
+  if (wasActive) next.delete(value)
   else next.add(value)
   selected.value = next
   emitSources()
+  emitActiveCategories()
+  if (!wasActive && categoryMap[value]) {
+    emit('expandCategories', categoryMap[value])
+  }
+}
+
+function emitActiveCategories() {
+  const cats = new Set<string>()
+  for (const val of selected.value) {
+    const mapped = categoryMap[val]
+    if (mapped) {
+      for (const cat of mapped) cats.add(cat)
+    }
+  }
+  // EDR is always relevant if any OS is selected
+  if (cats.has('windows') || cats.has('linux') || cats.has('macos')) {
+    cats.add('edr')
+  }
+  emit('activeCategories', [...cats])
 }
 
 function emitSources() {
@@ -63,7 +106,7 @@ const sections = [
 </script>
 
 <template>
-  <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
+  <div class="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
     <div
       v-for="section in sections"
       :key="section.label"

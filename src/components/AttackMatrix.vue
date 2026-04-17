@@ -17,6 +17,15 @@ const environmentSourceIds = ref<Set<string>>(new Set())
 const activeSourceIds = ref<Set<string>>(new Set())
 
 const hoveredSourceId = ref<string | null>(null)
+const activeOsEnvironments = ref<string[]>([])
+const activeEnvCategories = ref<Set<string>>(new Set())
+const sourcetypePanelRef = ref<InstanceType<typeof SourcetypePanel> | null>(null)
+
+function onExpandCategories(categories: string[]) {
+  for (const cat of categories) {
+    sourcetypePanelRef.value?.expandCategory(cat as SourceCategory)
+  }
+}
 
 function onEnvironmentChange(sourceIds: string[]) {
   environmentSourceIds.value = new Set(sourceIds)
@@ -126,6 +135,7 @@ const maxTechniques = computed(() =>
     <!-- Sidebar -->
     <aside class="w-64 shrink-0 border-r border-zinc-800 bg-zinc-950/80 p-4 overflow-hidden flex flex-col">
       <SourcetypePanel
+        ref="sourcetypePanelRef"
         :sourcetypes="sourcetypes"
         :active-ids="activeSourceIds"
         @toggle="toggleSource"
@@ -145,9 +155,8 @@ const maxTechniques = computed(() =>
         <div class="flex items-center mb-2">
           <div class="shrink-0">
             <h1 class="text-lg font-semibold tracking-tight">
-              <span class="text-zinc-500">Viz</span><span class="text-zinc-100">Matrix</span>
+              <span class="text-zinc-500">Viz-</span><span class="text-zinc-100">Matrix</span>
             </h1>
-            <p class="text-[10px] text-zinc-600 mt-0.5">What does your environment look like?</p>
           </div>
           <div class="flex-1 flex justify-center">
             <CoverageStats :active-sources="activeSources" :in-scope-ids="inScopeTechniqueIds" />
@@ -166,12 +175,17 @@ const maxTechniques = computed(() =>
           </div>
         </div>
         <div class="border-t border-zinc-800/60 pt-2">
-          <EnvironmentSetup @apply="onEnvironmentChange" />
+          <EnvironmentSetup
+            @apply="onEnvironmentChange"
+            @expand-categories="onExpandCategories"
+            @active-categories="(cats: string[]) => { activeEnvCategories = new Set(cats); activeOsEnvironments = cats.filter(c => ['windows','linux','macos'].includes(c)) }"
+          />
         </div>
         <div v-if="inScopeTechniqueIds.size > 0" class="border-t border-zinc-800/60 mt-2 pt-2">
           <Recommendations
             :active-sources="activeSources"
             :in-scope-ids="inScopeTechniqueIds"
+            :active-env-categories="activeEnvCategories"
             @enable="toggleSource"
             @hover-source="(id: string) => hoveredSourceId = id"
             @leave-source="hoveredSourceId = null"
@@ -215,6 +229,7 @@ const maxTechniques = computed(() =>
                 :active-sources="activeSources"
                 :in-scope="inScopeTechniqueIds.has(tech.id)"
                 :highlighted-source-id="hoveredSourceId"
+                :active-os="activeOsEnvironments"
                 @hover="() => {}"
                 @leave="() => {}"
               />

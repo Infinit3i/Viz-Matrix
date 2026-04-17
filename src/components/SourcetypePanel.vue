@@ -17,8 +17,8 @@ const emit = defineEmits<{
   leaveSource: []
 }>()
 
-const categories = ['endpoint', 'edr', 'network', 'identity', 'cloud', 'email', 'application'] as SourceCategory[]
-const collapsed = ref<Set<SourceCategory>>(new Set(['edr', 'cloud', 'email', 'application']))
+const categories = ['windows', 'linux', 'macos', 'edr', 'network', 'identity', 'cloud', 'email', 'application', 'cicd', 'saas'] as SourceCategory[]
+const collapsed = ref<Set<SourceCategory>>(new Set(['linux', 'macos', 'edr', 'cloud', 'email', 'application', 'cicd', 'saas']))
 
 function toggleCollapse(cat: SourceCategory) {
   const next = new Set(collapsed.value)
@@ -27,13 +27,18 @@ function toggleCollapse(cat: SourceCategory) {
   collapsed.value = next
 }
 
+function expandCategory(cat: SourceCategory) {
+  const next = new Set(collapsed.value)
+  next.delete(cat)
+  collapsed.value = next
+}
+
+defineExpose({ expandCategory })
+
 function getByCategory(cat: SourceCategory) {
   return props.sourcetypes.filter(s => s.category === cat)
 }
 
-function isCategoryFullyActive(cat: SourceCategory) {
-  return getByCategory(cat).every(s => props.activeIds.has(s.id))
-}
 </script>
 
 <template>
@@ -57,19 +62,15 @@ function isCategoryFullyActive(cat: SourceCategory) {
         <div class="flex items-center gap-2 mb-1">
           <button
             class="flex items-center gap-2 flex-1 text-left group"
-            @click="isCategoryFullyActive(cat) ? emit('disableCategory', cat) : emit('enableCategory', cat)"
+            @click="toggleCollapse(cat)"
           >
+            <span class="text-[11px] font-mono text-zinc-500 group-hover:text-zinc-200 transition-colors shrink-0">
+              {{ collapsed.has(cat) ? '+' : '−' }}
+            </span>
             <span class="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 group-hover:text-zinc-300 transition-colors">
               {{ categoryLabels[cat] }}
             </span>
             <span class="flex-1 h-px bg-zinc-800" />
-          </button>
-          <button
-            class="text-[11px] font-mono w-4 h-4 flex items-center justify-center rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-700 transition-colors shrink-0"
-            @click="toggleCollapse(cat)"
-            :title="collapsed.has(cat) ? 'Expand' : 'Collapse'"
-          >
-            {{ collapsed.has(cat) ? '+' : '−' }}
           </button>
         </div>
 
