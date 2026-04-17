@@ -1,5 +1,31 @@
-# Vue 3 + TypeScript + Vite
+# Viz-Matrix
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+MITRE ATT&CK visibility coverage matrix for defenders. Map your log sources to ATT&CK techniques and see where your blind spots are.
 
-Learn more about the recommended Project Setup and IDE Support in the [Vue Docs TypeScript Guide](https://vuejs.org/guide/typescript/overview.html#project-setup).
+**Live:** [infinit3i.github.io/Viz-Matrix](https://infinit3i.github.io/Viz-Matrix/)
+
+## What It Does
+
+- Select your environment (OS, cloud, email, SaaS, CI/CD)
+- Toggle the sourcetypes you're actually ingesting
+- See coverage: red = blind spot, yellow = single source, green = defense in depth
+- Per-OS split view when running multiple platforms
+- Recommendations for what to implement next
+- Click any red cell to open the MITRE ATT&CK page
+
+## Run Locally
+
+```bash
+npm install
+npm run dev
+```
+
+## Commands
+
+```bash
+npm run dev        # Dev server
+npm run build      # Type-check + production build
+npm run test       # Unit tests
+npm run lint       # ESLint
+npm run ci         # All of the above
+```
