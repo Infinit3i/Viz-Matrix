@@ -7,6 +7,7 @@ const props = defineProps<{
   activeSources: Sourcetype[]
   inScopeIds: Set<string>
   activeEnvCategories: Set<string>
+  crownJewelIds: Set<string>
 }>()
 
 const allTechniqueIds = computed(() => {
@@ -45,6 +46,7 @@ const recommendations = computed<Recommendation[]>(() => {
   return inactive
     .map(src => {
       let blindSpotsFilled = 0
+      let crownJewelBlindSpots = 0
       let singlePointsFixed = 0
       const newTechniques: string[] = []
 
@@ -53,20 +55,21 @@ const recommendations = computed<Recommendation[]>(() => {
 
         const currentCount = props.activeSources.filter(s => s.techniqueIds.includes(tid)).length
         const isInScope = props.inScopeIds.has(tid)
+        const isCrown = props.crownJewelIds.has(tid)
 
         if (isInScope && currentCount === 0) {
           blindSpotsFilled++
+          if (isCrown) crownJewelBlindSpots++
           newTechniques.push(tid)
         } else if (isInScope && currentCount === 1) {
           singlePointsFixed++
         } else if (!isInScope) {
-          // This would bring new techniques into scope
           newTechniques.push(tid)
         }
       }
 
-      // Score: blind spots matter most, then single-point fixes, then new scope
-      const score = blindSpotsFilled * 3 + singlePointsFixed * 2 + newTechniques.length
+      // Crown jewel blind spots score 3x more than regular blind spots
+      const score = (blindSpotsFilled - crownJewelBlindSpots) * 3 + crownJewelBlindSpots * 9 + singlePointsFixed * 2 + newTechniques.length
 
       return { sourcetype: src, blindSpotsFilled, singlePointsFixed, newTechniques, score }
     })

@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
-  base: '/Viz-Matrix/',
+  base: process.env.GITHUB_ACTIONS ? '/Viz-Matrix/' : '/',
   plugins: [vue(), tailwindcss()],
   test: {
     environment: 'jsdom',

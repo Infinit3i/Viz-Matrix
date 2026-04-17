@@ -10,6 +10,7 @@ const props = defineProps<{
   inScope: boolean
   highlightedSourceId: string | null
   activeOs: string[]
+  isCrownJewel: boolean
 }>()
 
 const emit = defineEmits<{
@@ -91,9 +92,12 @@ const mitreUrl = computed(() => {
   return `${base}${parts[0]}/`
 })
 
+const isCrownBlindSpot = computed(() => isBlindSpot.value && props.isCrownJewel)
+
 const statusLabel = computed(() => {
   if (!props.inScope) return 'N/A'
-  if (coverageCount.value === 0) return 'Blind Spot'
+  const jewel = props.isCrownJewel ? ' [CROWN JEWEL]' : ''
+  if (coverageCount.value === 0) return `Blind Spot${jewel}`
   if (hasMultipleOs.value) {
     const missing = osCoverage.value.filter(o => !o.covered).map(o => o.os)
     if (missing.length > 0) return `Partial — missing: ${missing.join(', ')}`
@@ -121,9 +125,14 @@ function onClick() {
       width: '100%',
       height: '28px',
       minWidth: '12px',
-      outline: isHighlighted ? `2px solid ${highlightColor}` : 'none',
+      outline: isHighlighted ? `2px solid ${highlightColor}`
+        : isCrownBlindSpot ? '2px solid rgba(245, 158, 11, 0.8)'
+        : isCrownJewel && inScope ? '1px solid rgba(245, 158, 11, 0.35)'
+        : 'none',
       outlineOffset: '-1px',
-      boxShadow: isHighlighted ? `0 0 8px ${highlightColor}80` : 'none',
+      boxShadow: isHighlighted ? `0 0 8px ${highlightColor}80`
+        : isCrownBlindSpot ? '0 0 10px rgba(245, 158, 11, 0.4)'
+        : 'none',
       backgroundColor: !hasMultipleOs || !inScope ? cellColor : 'transparent',
     }"
     :title="`${techniqueId}: ${techniqueName}\n${statusLabel}`"

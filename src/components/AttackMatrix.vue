@@ -19,7 +19,19 @@ const activeSourceIds = ref<Set<string>>(new Set())
 const hoveredSourceId = ref<string | null>(null)
 const activeOsEnvironments = ref<string[]>([])
 const activeEnvCategories = ref<Set<string>>(new Set())
+const crownJewelSourceIds = ref<Set<string>>(new Set())
 const sourcetypePanelRef = ref<InstanceType<typeof SourcetypePanel> | null>(null)
+
+// Crown jewel techniques: all techniques coverable by crown jewel environment sources
+const crownJewelTechniqueIds = computed(() => {
+  const ids = new Set<string>()
+  for (const s of sourcetypes) {
+    if (crownJewelSourceIds.value.has(s.id)) {
+      for (const tid of s.techniqueIds) ids.add(tid)
+    }
+  }
+  return ids
+})
 
 function onExpandCategories(categories: string[]) {
   for (const cat of categories) {
@@ -179,6 +191,7 @@ const maxTechniques = computed(() =>
             @apply="onEnvironmentChange"
             @expand-categories="onExpandCategories"
             @active-categories="(cats: string[]) => { activeEnvCategories = new Set(cats); activeOsEnvironments = cats.filter(c => ['windows','linux','macos'].includes(c)) }"
+            @crown-jewel-techniques="(ids: Set<string>) => crownJewelSourceIds = ids"
           />
         </div>
         <div v-if="inScopeTechniqueIds.size > 0" class="border-t border-zinc-800/60 mt-2 pt-2">
@@ -186,6 +199,7 @@ const maxTechniques = computed(() =>
             :active-sources="activeSources"
             :in-scope-ids="inScopeTechniqueIds"
             :active-env-categories="activeEnvCategories"
+            :crown-jewel-ids="crownJewelTechniqueIds"
             @enable="toggleSource"
             @hover-source="(id: string) => hoveredSourceId = id"
             @leave-source="hoveredSourceId = null"
@@ -230,6 +244,7 @@ const maxTechniques = computed(() =>
                 :in-scope="inScopeTechniqueIds.has(tech.id)"
                 :highlighted-source-id="hoveredSourceId"
                 :active-os="activeOsEnvironments"
+                :is-crown-jewel="crownJewelTechniqueIds.has(tech.id)"
                 @hover="() => {}"
                 @leave="() => {}"
               />

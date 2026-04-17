@@ -5,7 +5,7 @@ import { ref } from 'vue'
 // Each maps to all sourcetypes that COULD provide visibility into that infrastructure.
 
 const osOptions = [
-  { label: 'Windows', value: 'windows', sourceIds: ['win-security', 'sysmon', 'win-powershell', 'win-wmi', 'edr-crowdstrike', 'edr-defender', 'edr-sentinelone', 'edr-carbonblack', 'edr-cortex'] },
+  { label: 'Windows', value: 'windows', sourceIds: ['win-security', 'win-system', 'win-application', 'sysmon', 'win-powershell', 'win-cmdline', 'win-defender', 'win-wmi', 'edr-crowdstrike', 'edr-defender', 'edr-sentinelone', 'edr-carbonblack', 'edr-cortex'] },
   { label: 'Linux', value: 'linux', sourceIds: ['linux-auditd', 'linux-sysmon', 'linux-journald', 'edr-crowdstrike', 'edr-defender', 'edr-sentinelone', 'edr-carbonblack', 'edr-cortex'] },
   { label: 'macOS', value: 'macos', sourceIds: ['macos-unified', 'macos-esf', 'edr-crowdstrike', 'edr-defender', 'edr-sentinelone', 'edr-carbonblack', 'edr-cortex'] },
 ]
@@ -31,9 +31,10 @@ const infraOptions = [
   { label: 'SaaS Apps', value: 'saas', sourceIds: ['o365-unified', 'google-workspace', 'slack-audit', 'zoom-logs', 'salesforce-audit', 'servicenow-audit'] },
 ]
 
+// Three states: off → selected → crown jewel → off
 const selected = ref<Set<string>>(new Set())
+const crownJewels = ref<Set<string>>(new Set())
 
-// Map environment values → sidebar categories to expand
 const categoryMap: Record<string, string[]> = {
   windows: ['windows'],
   linux: ['linux'],
@@ -56,19 +57,33 @@ const emit = defineEmits<{
   apply: [sourceIds: string[]]
   expandCategories: [categories: string[]]
   activeCategories: [categories: string[]]
+  crownJewelTechniques: [techniqueIds: Set<string>]
 }>()
 
 function toggle(value: string) {
-  const next = new Set(selected.value)
-  const wasActive = next.has(value)
-  if (wasActive) next.delete(value)
-  else next.add(value)
-  selected.value = next
+  const sel = new Set(selected.value)
+  const cj = new Set(crownJewels.value)
+
+  if (!sel.has(value)) {
+    // Off → selected
+    sel.add(value)
+    if (categoryMap[value]) {
+      emit('expandCategories', categoryMap[value])
+    }
+  } else if (!cj.has(value)) {
+    // Selected → crown jewel
+    cj.add(value)
+  } else {
+    // Crown jewel → off
+    sel.delete(value)
+    cj.delete(value)
+  }
+
+  selected.value = sel
+  crownJewels.value = cj
   emitSources()
   emitActiveCategories()
-  if (!wasActive && categoryMap[value]) {
-    emit('expandCategories', categoryMap[value])
-  }
+  emitCrownJewels()
 }
 
 function emitActiveCategories() {
@@ -79,7 +94,6 @@ function emitActiveCategories() {
       for (const cat of mapped) cats.add(cat)
     }
   }
-  // EDR is always relevant if any OS is selected
   if (cats.has('windows') || cats.has('linux') || cats.has('macos')) {
     cats.add('edr')
   }
@@ -95,6 +109,17 @@ function emitSources() {
     }
   }
   emit('apply', [...sourceIds])
+}
+
+function emitCrownJewels() {
+  const allOptions = [...osOptions, ...identityOptions, ...cloudOptions, ...infraOptions]
+  const crownSourceIds = new Set<string>()
+  for (const opt of allOptions) {
+    if (crownJewels.value.has(opt.value)) {
+      for (const id of opt.sourceIds) crownSourceIds.add(id)
+    }
+  }
+  emit('crownJewelTechniques', crownSourceIds)
 }
 
 const sections = [
@@ -118,12 +143,16 @@ const sections = [
       <button
         v-for="opt in section.options"
         :key="opt.value"
-        class="text-[11px] px-2 py-0.5 rounded-md border transition-all"
-        :class="selected.has(opt.value)
-          ? 'bg-zinc-700 border-zinc-500 text-zinc-100'
-          : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'"
+        class="text-[11px] px-2 py-0.5 rounded-md border transition-all flex items-center gap-1"
+        :class="crownJewels.has(opt.value)
+          ? 'bg-amber-950/60 border-amber-500 text-amber-200'
+          : selected.has(opt.value)
+            ? 'bg-zinc-700 border-zinc-500 text-zinc-100'
+            : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'"
         @click="toggle(opt.value)"
+        :title="crownJewels.has(opt.value) ? 'Crown Jewel — click to remove' : selected.has(opt.value) ? 'Click to mark as Crown Jewel' : 'Click to add'"
       >
+        <span v-if="crownJewels.has(opt.value)" class="text-amber-400 text-[9px]">&#9813;</span>
         {{ opt.label }}
       </button>
     </div>
