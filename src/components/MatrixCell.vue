@@ -11,6 +11,7 @@ const props = defineProps<{
   highlightedSourceId: string | null
   activeOs: string[]
   isCrownJewel: boolean
+  aptInfo?: { score: number; color: string; comment: string }
 }>()
 
 const emit = defineEmits<{
@@ -56,6 +57,11 @@ const hasMultipleOs = computed(() => relevantOs.value.length > 1)
 
 // Overall color when NOT doing per-OS split (single OS or non-OS technique)
 const cellColor = computed(() => {
+  // APT layer overrides normal coloring
+  if (props.aptInfo) {
+    return props.aptInfo.color + 'CC' // Add some transparency
+  }
+
   if (!props.inScope) return 'rgba(39, 39, 42, 0.2)'
   if (coverageCount.value === 0) return 'rgba(220, 50, 40, 0.85)'
   if (coverageCount.value === 1) return 'rgba(210, 180, 40, 0.85)'
@@ -63,6 +69,11 @@ const cellColor = computed(() => {
 })
 
 function segmentColor(covered: boolean): string {
+  // APT layer overrides for multi-OS segments
+  if (props.aptInfo && covered) {
+    return props.aptInfo.color + 'CC' // Add some transparency
+  }
+
   if (!covered) return 'rgba(220, 50, 40, 0.85)'
   const count = coverageCount.value
   if (count === 1) return 'rgba(210, 180, 40, 0.85)'
@@ -95,15 +106,18 @@ const mitreUrl = computed(() => {
 const isCrownBlindSpot = computed(() => isBlindSpot.value && props.isCrownJewel)
 
 const statusLabel = computed(() => {
-  if (!props.inScope) return 'N/A'
+  const aptPrefix = props.aptInfo ? 'APT TECHNIQUE — ' : ''
   const jewel = props.isCrownJewel ? ' [CROWN JEWEL]' : ''
-  if (coverageCount.value === 0) return `Blind Spot${jewel}`
+  const aptComment = props.aptInfo?.comment ? `\nAPT Info: ${props.aptInfo.comment}` : ''
+
+  if (!props.inScope) return `${aptPrefix}N/A${aptComment}`
+  if (coverageCount.value === 0) return `${aptPrefix}Blind Spot${jewel}${aptComment}`
   if (hasMultipleOs.value) {
     const missing = osCoverage.value.filter(o => !o.covered).map(o => o.os)
-    if (missing.length > 0) return `Partial — missing: ${missing.join(', ')}`
+    if (missing.length > 0) return `${aptPrefix}Partial — missing: ${missing.join(', ')}${aptComment}`
   }
-  if (coverageCount.value === 1) return `${coverageCount.value} source — single point of failure`
-  return `${coverageCount.value} sources`
+  if (coverageCount.value === 1) return `${aptPrefix}${coverageCount.value} source — single point of failure${aptComment}`
+  return `${aptPrefix}${coverageCount.value} sources${aptComment}`
 })
 
 function onMouseEnter() {
@@ -158,6 +172,15 @@ function onClick() {
 
     <!-- Single view -->
     <template v-else>
+      <!-- APT indicator -->
+      <span
+        v-if="aptInfo"
+        class="absolute top-0 right-0 text-[6px] text-red-400 leading-none p-[1px]"
+        title="APT Technique"
+      >
+        <i class="fas fa-exclamation-triangle"></i>
+      </span>
+
       <span
         v-if="isBlindSpot"
         class="absolute inset-0 flex items-center justify-center text-[7px] font-mono font-semibold text-white leading-none underline decoration-white/40"
@@ -168,7 +191,7 @@ function onClick() {
         v-else-if="coverageCount > 0"
         class="absolute inset-0 flex items-center justify-center text-[8px] font-mono font-medium text-white/80 leading-none"
       >
-        {{ coverageCount }}
+        {{ aptInfo ? aptInfo.score : coverageCount }}
       </span>
     </template>
   </div>

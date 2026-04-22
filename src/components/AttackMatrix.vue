@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { tactics } from '../data/mitreData'
 import { sourcetypes, type Sourcetype, type SourceCategory } from '../data/sourcetypes'
 import MatrixCell from './MatrixCell.vue'
 import TechniqueTooltip from './TechniqueTooltip.vue'
 import SourcetypePanel from './SourcetypePanel.vue'
+import AptPanel, { type AptGroup } from './AptPanel.vue'
 import CoverageStats from './CoverageStats.vue'
 import Recommendations from './Recommendations.vue'
 import EnvironmentSetup from './EnvironmentSetup.vue'
+import { exportToNavigator, importFromNavigator, downloadLayer, uploadLayer } from '../utils/navigatorExport'
+import HelpTutorial from './HelpTutorial.vue'
 
 // Environment: defines what's relevant (attack surface)
 // These are sourcetype IDs that COULD apply to the user's environment
@@ -142,31 +145,220 @@ const maxTechniques = computed(() =>
 )
 
 const sidebarOpen = ref(false)
+const aptPanelOpen = ref(false)
+const showHelpTutorial = ref(false)
+const forceShowTutorial = ref(false)
+
+// Desktop collapse states
+const leftSidebarCollapsed = ref(false)
+const rightSidebarCollapsed = ref(false)
+
+// APT Groups state
+const aptGroups = ref<AptGroup[]>([])
+const activeAptIds = ref<Set<string>>(new Set())
+const hoveredAptId = ref<string | null>(null)
+
+// Computed relevant APT groups based on user's infrastructure
+const relevantAptGroups = computed(() => {
+  return aptGroups.value.map(group => {
+    // Calculate how many of this group's techniques are relevant to user's infrastructure
+    const relevantTechniques = new Map<string, any>()
+
+    for (const [techniqueId, info] of group.techniques) {
+      // Check if this technique is covered by any sourcetype in user's environment
+      const isRelevant = relevantSourcetypes.value.some(source =>
+        source.techniqueIds.includes(techniqueId)
+      )
+
+      if (isRelevant) {
+        relevantTechniques.set(techniqueId, info)
+      }
+    }
+
+    return {
+      ...group,
+      relevantTechniqueCount: relevantTechniques.size,
+      relevancyScore: relevantTechniques.size / group.techniqueCount,
+      relevantTechniques
+    }
+  }).filter(group => group.relevancyScore > 0) // Only show groups with some relevance
+})
+
+// Computed APT techniques from active AND relevant groups
+const activeAptTechniques = computed(() => {
+  const techniques = new Map<string, { score: number; color: string; comment: string; aptGroup: string }>()
+
+  for (const aptGroup of relevantAptGroups.value) {
+    if (activeAptIds.value.has(aptGroup.id)) {
+      for (const [techniqueId, info] of aptGroup.relevantTechniques) {
+        // Only include techniques that are in scope for user's environment
+        if (inScopeTechniqueIds.value.has(techniqueId)) {
+          if (!techniques.has(techniqueId)) {
+            techniques.set(techniqueId, { ...info, aptGroup: aptGroup.name })
+          }
+        }
+      }
+    }
+  }
+
+  return techniques
+})
+
+// Export/Import functions
+async function exportCoverage() {
+  try {
+    const layer = exportToNavigator(
+      activeSourceIds.value,
+      'Viz-Matrix Coverage',
+      `Coverage matrix exported from Viz-Matrix with ${activeSources.value.length} active sources`
+    )
+    downloadLayer(layer)
+  } catch (error) {
+    console.error('Export failed:', error)
+    alert('Export failed. Please try again.')
+  }
+}
+
+async function importCoverage() {
+  try {
+    const layer = await uploadLayer()
+    const result = importFromNavigator(layer)
+
+    // For APT layers: Add to APT groups list
+    if (result.layerInfo.isAptLayer) {
+      const aptId = `apt-${Date.now()}`
+      const newAptGroup: AptGroup = {
+        id: aptId,
+        name: result.layerInfo.name || 'Unnamed APT',
+        description: result.layerInfo.description || 'Imported APT layer',
+        threatLevel: result.layerInfo.threatLevel,
+        techniqueCount: result.layerInfo.coveredTechniques.length,
+        techniques: result.layerInfo.aptTechniques,
+        layerColors: result.layerInfo.layerColors
+      }
+
+      aptGroups.value.push(newAptGroup)
+      activeAptIds.value.add(aptId)
+
+      alert(`APT Layer Imported: "${result.layerInfo.name}"\n` +
+            `Threat Level: ${result.layerInfo.threatLevel.toUpperCase()}\n` +
+            `${result.layerInfo.coveredTechniques.length} APT techniques identified\n\n` +
+            `Added to APT panel - manually select your actual sourcetypes to see coverage gaps`)
+    } else {
+      // For normal layers: enable matching sourcetypes
+      activeSourceIds.value = result.activeSourceIds
+
+      alert(`Successfully imported "${result.layerInfo.name}"\n` +
+            `Loaded ${result.activeSourceIds.size} sourcetypes covering ${result.layerInfo.coveredTechniques.length} techniques`)
+    }
+  } catch (error) {
+    console.error('Import failed:', error)
+    alert('Import failed: ' + (error as Error).message)
+  }
+}
+
+// APT Management Functions
+function toggleApt(id: string) {
+  const next = new Set(activeAptIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  activeAptIds.value = next
+}
+
+function enableAllApts() {
+  activeAptIds.value = new Set(relevantAptGroups.value.map(apt => apt.id))
+}
+
+function disableAllApts() {
+  activeAptIds.value = new Set()
+}
+
+// Total loaded APT groups (including non-relevant ones)
+const totalAptGroups = computed(() => aptGroups.value.length)
+
+function renameApt(id: string, newName: string) {
+  const apt = aptGroups.value.find(a => a.id === id)
+  if (apt) {
+    apt.name = newName
+  }
+}
+
+function deleteApt(id: string) {
+  if (confirm('Delete this APT group?')) {
+    aptGroups.value = aptGroups.value.filter(a => a.id !== id)
+    activeAptIds.value.delete(id)
+  }
+}
+
+// Desktop sidebar collapse functions
+function toggleLeftSidebar() {
+  leftSidebarCollapsed.value = !leftSidebarCollapsed.value
+}
+
+function toggleRightSidebar() {
+  rightSidebarCollapsed.value = !rightSidebarCollapsed.value
+}
+
+// Help tutorial function
+function showHelp() {
+  forceShowTutorial.value = true
+  showHelpTutorial.value = true
+}
+
+function closeHelp() {
+  showHelpTutorial.value = false
+  forceShowTutorial.value = false
+}
+
+// Check for first-time users on mount
+onMounted(() => {
+  const hasSeenTutorial = localStorage.getItem('viz-matrix-tutorial-seen')
+  if (!hasSeenTutorial) {
+    showHelpTutorial.value = true
+  }
+})
 </script>
 
 <template>
   <div class="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden relative">
-    <!-- Mobile sidebar toggle -->
+    <!-- Mobile toggles -->
     <button
       class="fixed top-3 left-3 z-50 lg:hidden w-8 h-8 flex items-center justify-center rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
       @click="sidebarOpen = !sidebarOpen"
     >
-      <span class="text-sm">{{ sidebarOpen ? '&times;' : '&#9776;' }}</span>
+      <i :class="sidebarOpen ? 'fas fa-times' : 'fas fa-bars'"></i>
     </button>
 
-    <!-- Sidebar backdrop (mobile) -->
+    <button
+      class="fixed top-3 right-3 z-50 lg:hidden w-8 h-8 flex items-center justify-center rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
+      @click="aptPanelOpen = !aptPanelOpen"
+    >
+      <i :class="aptPanelOpen ? 'fas fa-times' : 'fas fa-user-secret'"></i>
+    </button>
+
+    <!-- Sidebar backdrops (mobile) -->
     <div
       v-if="sidebarOpen"
       class="fixed inset-0 z-30 bg-black/50 lg:hidden"
       @click="sidebarOpen = false"
     />
+    <div
+      v-if="aptPanelOpen"
+      class="fixed inset-0 z-30 bg-black/50 lg:hidden"
+      @click="aptPanelOpen = false"
+    />
 
-    <!-- Sidebar -->
+    <!-- Left Sidebar - Sourcetypes -->
     <aside
-      class="w-64 shrink-0 border-r border-zinc-800 bg-zinc-950 p-4 overflow-hidden flex flex-col z-40 fixed inset-y-0 left-0 transition-transform duration-200 lg:relative lg:translate-x-0"
-      :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+      class="sourcetype-panel shrink-0 border-r border-zinc-800 bg-zinc-950 p-4 overflow-hidden flex flex-col z-40 fixed inset-y-0 left-0 sidebar-transition lg:relative lg:translate-x-0"
+      :class="[
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+        leftSidebarCollapsed ? 'lg:w-0 lg:p-0 lg:border-r-0' : 'lg:w-64'
+      ]"
+      :style="{ width: leftSidebarCollapsed ? '0px' : '256px' }"
     >
       <SourcetypePanel
+        v-show="!leftSidebarCollapsed"
         ref="sourcetypePanelRef"
         :sourcetypes="sourcetypes"
         :active-ids="activeSourceIds"
@@ -192,6 +384,23 @@ const sidebarOpen = ref(false)
       </div>
     </aside>
 
+    <!-- Left Sidebar Collapse Handle -->
+    <div
+      class="hidden lg:flex fixed left-0 top-1/2 z-50 -translate-y-1/2 sidebar-transition"
+      :class="leftSidebarCollapsed ? 'translate-x-0' : 'translate-x-64'"
+    >
+      <button
+        @click="toggleLeftSidebar"
+        class="sidebar-handle border border-zinc-700 border-l-0 rounded-r-lg p-2 text-zinc-400 hover:text-zinc-200 transition-all duration-200 group"
+        title="Toggle left sidebar"
+      >
+        <i
+          class="fas fa-chevron-left text-xs transition-transform duration-200"
+          :class="leftSidebarCollapsed ? 'rotate-180' : ''"
+        ></i>
+      </button>
+    </div>
+
     <!-- Main content -->
     <main class="flex-1 flex flex-col overflow-hidden">
       <!-- Header -->
@@ -204,9 +413,41 @@ const sidebarOpen = ref(false)
             <h1 class="text-lg font-semibold tracking-tight">
               <span class="text-zinc-500">Viz-</span><span class="text-zinc-100">Matrix</span>
             </h1>
+            <!-- Export/Import buttons -->
+            <div class="import-export-buttons flex items-center gap-1.5 ml-2">
+              <button
+                @click="exportCoverage"
+                class="px-2 py-1 text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded transition-colors"
+                title="Export to MITRE Navigator"
+              >
+                <i class="fas fa-download mr-1"></i>Export
+              </button>
+              <button
+                @click="importCoverage"
+                class="px-2 py-1 text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded transition-colors"
+                title="Import from MITRE Navigator"
+              >
+                <i class="fas fa-upload mr-1"></i>Import
+              </button>
+              <button
+                @click="showHelp"
+                class="px-2 py-1 text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded transition-colors"
+                title="Show help tutorial"
+              >
+                <i class="fas fa-question-circle"></i>
+              </button>
+            </div>
           </div>
-          <div class="flex-1 flex justify-center">
+          <div class="flex-1 flex flex-col items-center gap-1">
             <CoverageStats :active-sources="activeSources" :in-scope-ids="inScopeTechniqueIds" />
+            <!-- APT Active Indicator -->
+            <div v-if="activeAptIds.size > 0" class="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-red-900/30 text-red-300 border border-red-800/50">
+              <i class="fas fa-exclamation-triangle text-xs"></i>
+              <span>{{ activeAptIds.size }} APT Group{{ activeAptIds.size === 1 ? '' : 's' }} Active</span>
+              <button @click="disableAllApts" class="ml-1 hover:bg-black/20 rounded px-1" title="Clear All APTs">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
           </div>
           <div class="shrink-0 flex items-center justify-center lg:justify-end gap-4 text-xs">
             <div class="flex items-center gap-1.5">
@@ -243,7 +484,7 @@ const sidebarOpen = ref(false)
       </header>
 
       <!-- Matrix grid -->
-      <div class="flex-1 overflow-auto p-1 lg:p-4">
+      <div class="matrix-area flex-1 overflow-auto p-1 lg:p-4">
         <div
           class="grid gap-px min-w-fit"
           :style="{
@@ -280,6 +521,7 @@ const sidebarOpen = ref(false)
                 :highlighted-source-id="hoveredSourceId"
                 :active-os="activeOsEnvironments"
                 :is-crown-jewel="crownJewelTechniqueIds.has(tech.id)"
+                :apt-info="activeAptTechniques.get(tech.id)"
                 @hover="() => {}"
                 @leave="() => {}"
               />
@@ -320,6 +562,47 @@ const sidebarOpen = ref(false)
       </footer>
     </main>
 
+    <!-- Right Sidebar - APT Groups -->
+    <aside
+      class="apt-panel shrink-0 border-l border-zinc-800 bg-zinc-950 p-4 overflow-hidden flex flex-col z-40 fixed inset-y-0 right-0 sidebar-transition lg:relative lg:translate-x-0"
+      :class="[
+        aptPanelOpen ? 'translate-x-0' : 'translate-x-full',
+        rightSidebarCollapsed ? 'lg:w-0 lg:p-0 lg:border-l-0' : 'lg:w-64'
+      ]"
+      :style="{ width: rightSidebarCollapsed ? '0px' : '256px' }"
+    >
+      <AptPanel
+        v-show="!rightSidebarCollapsed"
+        :apt-groups="relevantAptGroups"
+        :active-ids="activeAptIds"
+        :total-groups="totalAptGroups"
+        @toggle="toggleApt"
+        @enable-all="enableAllApts"
+        @disable-all="disableAllApts"
+        @hover-apt="(id: string) => hoveredAptId = id"
+        @leave-apt="hoveredAptId = null"
+        @rename-apt="renameApt"
+        @delete-apt="deleteApt"
+      />
+    </aside>
+
+    <!-- Right Sidebar Collapse Handle -->
+    <div
+      class="hidden lg:flex fixed right-0 top-1/2 z-50 -translate-y-1/2 sidebar-transition"
+      :class="rightSidebarCollapsed ? 'translate-x-0' : '-translate-x-64'"
+    >
+      <button
+        @click="toggleRightSidebar"
+        class="sidebar-handle border border-zinc-700 border-r-0 rounded-l-lg p-2 text-zinc-400 hover:text-zinc-200 transition-all duration-200 group"
+        title="Toggle right sidebar"
+      >
+        <i
+          class="fas fa-chevron-right text-xs transition-transform duration-200"
+          :class="rightSidebarCollapsed ? 'rotate-180' : ''"
+        ></i>
+      </button>
+    </div>
+
     <!-- Tooltip -->
     <TechniqueTooltip
       v-if="tooltip"
@@ -330,6 +613,13 @@ const sidebarOpen = ref(false)
       :in-scope="inScopeTechniqueIds.has(tooltip.techniqueId)"
       :x="tooltip.x"
       :y="tooltip.y"
+    />
+
+    <!-- Help Tutorial -->
+    <HelpTutorial
+      v-if="showHelpTutorial"
+      :force-show="forceShowTutorial"
+      @close="closeHelp"
     />
   </div>
 </template>
