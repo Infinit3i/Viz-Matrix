@@ -6,24 +6,21 @@ When you first open Viz-Matrix, an interactive tutorial automatically appears to
 
 ### Tutorial Flow
 
-1. **Welcome Screen**
-   - Asks if you want to take a guided tour
-   - Options: "Start tour" or "No thanks"
-   - Choice is remembered (won't ask again)
+**Direct Start** - No welcome screen, starts immediately when help button is clicked
 
-2. **Step-by-Step Highlights**
-   - **Matrix (Center)**: Your attack surface - what you own
-   - **Left Sidebar**: Your detection capabilities - what you can see
-   - **Right Sidebar**: Threat intelligence - what attacks you
-   - **Import/Export**: Data management and sharing
+**Step-by-Step Highlights:**
+1. **Matrix (Center)**: Your attack surface - what you own
+2. **Left Sidebar**: Your detection capabilities - what you can see
+3. **Right Sidebar**: Threat intelligence - what attacks you
+4. **Import/Export**: Data management and sharing
 
 ### Interactive Features
 
 - **Visual Highlighting**: Blue outline and glow on targeted areas
 - **Auto-Scrolling**: Smoothly centers highlighted elements
-- **Progress Indicator**: Shows current step (1/5, 2/5, etc.)
-- **Skip Option**: Can skip tutorial at any time
-- **Remembers Choice**: Uses localStorage to avoid showing again
+- **Progress Indicator**: Shows current step (1/4, 2/4, etc.)
+- **Direct Start**: Begins immediately when help button clicked
+- **Simple Navigation**: Only "Next" and "Finish" buttons
 
 ### Re-Access Tutorial
 

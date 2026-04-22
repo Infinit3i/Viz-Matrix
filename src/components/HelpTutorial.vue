@@ -15,12 +15,6 @@ const showTutorial = ref(false)
 
 const steps = [
   {
-    title: 'Welcome to Viz-Matrix',
-    description: 'Would you like a quick tour to learn how to use the MITRE ATT&CK visibility matrix?',
-    target: null,
-    position: 'center'
-  },
-  {
     title: 'Attack Matrix (Center)',
     description: 'This matrix represents YOUR attack surface - what you own and operate. Each cell is a MITRE ATT&CK technique that could target your infrastructure.',
     target: '.matrix-area',
@@ -50,7 +44,7 @@ const currentStepData = computed(() => steps[currentStep.value])
 
 function startTutorial() {
   showTutorial.value = true
-  currentStep.value = 1 // Skip the intro step
+  currentStep.value = 0 // Start with first actual step
   nextTick(() => {
     highlightTarget()
   })
@@ -67,11 +61,6 @@ function nextStep() {
   }
 }
 
-function skipTutorial() {
-  cleanupHighlights()
-  localStorage.setItem('viz-matrix-tutorial-seen', 'true')
-  closeTutorial()
-}
 
 function closeTutorial() {
   cleanupHighlights()
@@ -108,7 +97,7 @@ onMounted(() => {
   // Check if user has seen tutorial before or if forced to show
   const hasSeenTutorial = localStorage.getItem('viz-matrix-tutorial-seen')
   if (!hasSeenTutorial || props.forceShow) {
-    showTutorial.value = true
+    startTutorial()
   }
 })
 
@@ -146,40 +135,15 @@ onUnmounted(() => {
         </div>
 
         <!-- Actions -->
-        <div class="flex items-center justify-between p-4 border-t border-zinc-800">
+        <div class="flex items-center justify-end p-4 border-t border-zinc-800">
           <button
-            @click="skipTutorial"
-            class="text-xs text-zinc-500 hover:text-zinc-300"
+            @click="nextStep"
+            class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
           >
-            Skip tutorial
+            {{ currentStep === steps.length - 1 ? 'Finish' : 'Next' }}
+            <i v-if="currentStep < steps.length - 1" class="fas fa-arrow-right ml-1"></i>
+            <i v-else class="fas fa-check ml-1"></i>
           </button>
-
-          <div class="flex gap-2">
-            <button
-              v-if="currentStep === 0"
-              @click="skipTutorial"
-              class="px-3 py-1.5 text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded transition-colors"
-            >
-              No thanks
-            </button>
-            <button
-              v-if="currentStep === 0"
-              @click="startTutorial"
-              class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
-            >
-              <i class="fas fa-play mr-1"></i>Start tour
-            </button>
-
-            <button
-              v-if="currentStep > 0"
-              @click="nextStep"
-              class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
-            >
-              {{ currentStep === steps.length - 1 ? 'Finish' : 'Next' }}
-              <i v-if="currentStep < steps.length - 1" class="fas fa-arrow-right ml-1"></i>
-              <i v-else class="fas fa-check ml-1"></i>
-            </button>
-          </div>
         </div>
       </div>
     </div>
