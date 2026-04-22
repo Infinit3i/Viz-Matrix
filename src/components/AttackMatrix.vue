@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* eslint-disable no-undef */
 import { ref, computed, onMounted } from 'vue'
 import { tactics } from '../data/mitreData'
 import { sourcetypes, type Sourcetype, type SourceCategory } from '../data/sourcetypes'
@@ -162,7 +163,7 @@ const hoveredAptId = ref<string | null>(null)
 const relevantAptGroups = computed(() => {
   return aptGroups.value.map(group => {
     // Calculate how many of this group's techniques are relevant to user's infrastructure
-    const relevantTechniques = new Map<string, any>()
+    const relevantTechniques = new Map<string, { score: number; color: string; comment: string }>()
 
     for (const [techniqueId, info] of group.techniques) {
       // Check if this technique is covered by any sourcetype in user's environment

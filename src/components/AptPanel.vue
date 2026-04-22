@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* eslint-disable no-undef */
 import { ref, computed } from 'vue'
 
 export interface AptGroup {
@@ -11,7 +12,7 @@ export interface AptGroup {
   layerColors: string[]
   relevantTechniqueCount?: number
   relevancyScore?: number
-  relevantTechniques?: Map<string, any>
+  relevantTechniques?: Map<string, { score: number; color: string; comment: string }>
 }
 
 const props = defineProps<{
@@ -80,10 +81,11 @@ function cancelEdit() {
   editingName.value = ''
 }
 
-function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Enter') {
+function handleKeydown(event: Event) {
+  const keyboardEvent = event as KeyboardEvent
+  if (keyboardEvent.key === 'Enter') {
     saveEdit()
-  } else if (event.key === 'Escape') {
+  } else if (keyboardEvent.key === 'Escape') {
     cancelEdit()
   }
 }

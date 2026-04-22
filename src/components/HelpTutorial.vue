@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+/* eslint-disable no-undef */
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 
 const props = defineProps<{
   forceShow?: boolean
@@ -67,14 +68,23 @@ function nextStep() {
 }
 
 function skipTutorial() {
+  cleanupHighlights()
   localStorage.setItem('viz-matrix-tutorial-seen', 'true')
   closeTutorial()
 }
 
 function closeTutorial() {
+  cleanupHighlights()
   showTutorial.value = false
   localStorage.setItem('viz-matrix-tutorial-seen', 'true')
   emit('close')
+}
+
+function cleanupHighlights() {
+  // Remove all tutorial highlights when closing
+  document.querySelectorAll('.tutorial-highlight').forEach(el => {
+    el.classList.remove('tutorial-highlight')
+  })
 }
 
 function highlightTarget() {
@@ -100,6 +110,11 @@ onMounted(() => {
   if (!hasSeenTutorial || props.forceShow) {
     showTutorial.value = true
   }
+})
+
+onUnmounted(() => {
+  // Clean up any remaining highlights when component is destroyed
+  cleanupHighlights()
 })
 </script>
 
