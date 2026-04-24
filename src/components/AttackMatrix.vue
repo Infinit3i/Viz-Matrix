@@ -10,7 +10,7 @@ import AptPanel, { type AptGroup } from './AptPanel.vue'
 import CoverageStats from './CoverageStats.vue'
 import Recommendations from './Recommendations.vue'
 import EnvironmentSetup from './EnvironmentSetup.vue'
-import { exportToNavigator, importFromNavigator, downloadLayer, uploadLayer } from '../utils/navigatorExport'
+import { exportToNavigator, importFromNavigator, downloadLayer, exportToXLSX, importFromXLSX, downloadXLSX, uploadFile, type NavigatorLayer } from '../utils/navigatorExport'
 import HelpTutorial from './HelpTutorial.vue'
 
 // Environment: defines what's relevant (attack surface)
@@ -75,17 +75,28 @@ const sortedTactics = computed(() =>
   tactics.map(tactic => ({
     ...tactic,
     techniques: [...tactic.techniques].sort((a, b) => {
+      // Check if techniques are affected by active APT groups
+      const aIsApt = activeAptTechniques.value.has(a.id) ? 1 : 0
+      const bIsApt = activeAptTechniques.value.has(b.id) ? 1 : 0
+
+      // APT-affected techniques go to the top first
+      if (aIsApt !== bIsApt) return bIsApt - aIsApt
+
+      // Then sort by scope (in-scope first, N/A last)
       const aInScope = inScopeTechniqueIds.value.has(a.id) ? 1 : 0
       const bInScope = inScopeTechniqueIds.value.has(b.id) ? 1 : 0
-      // In-scope first, N/A last
       if (aInScope !== bInScope) return bInScope - aInScope
-      // Within in-scope: blind spots (0) first, then by coverage ascending
+
+      // Within same APT status and scope: blind spots (0) first, then by coverage ascending
       const aCount = coverageCount(a.id)
       const bCount = coverageCount(b.id)
       return aCount - bCount
     }),
   }))
 )
+
+// Always show all techniques, but MatrixCell will handle showing/hiding technique IDs
+const filteredTactics = computed(() => sortedTactics.value)
 
 const tooltip = ref<{
   techniqueId: string
@@ -208,12 +219,34 @@ const activeAptTechniques = computed(() => {
 // Export/Import functions
 async function exportCoverage() {
   try {
-    const layer = exportToNavigator(
-      activeSourceIds.value,
-      'Viz-Matrix Coverage',
-      `Coverage matrix exported from Viz-Matrix with ${activeSources.value.length} active sources`
+    // Show format selection dialog
+    const choice = prompt(
+      'Select export format:\n\n' +
+      '• Type "json" for MITRE Navigator layer format\n' +
+      '• Type "excel" for Excel spreadsheet format\n\n' +
+      'Export as:',
+      'json'
     )
-    downloadLayer(layer)
+
+    if (!choice) return // User cancelled
+
+    const format = choice.toLowerCase().trim()
+    if (format !== 'json' && format !== 'excel' && format !== 'xlsx') {
+      alert('Please enter either "json" or "excel"')
+      return
+    }
+
+    if (format === 'json') {
+      const layer = exportToNavigator(
+        activeSourceIds.value,
+        'Viz-Matrix Coverage',
+        `Coverage matrix exported from Viz-Matrix with ${activeSources.value.length} active sources`
+      )
+      downloadLayer(layer)
+    } else {
+      const xlsxData = exportToXLSX(activeSourceIds.value)
+      downloadXLSX(xlsxData, `viz_matrix_coverage_${new Date().toISOString().split('T')[0]}.xlsx`)
+    }
   } catch (error) {
     console.error('Export failed:', error)
     alert('Export failed. Please try again.')
@@ -222,16 +255,22 @@ async function exportCoverage() {
 
 async function importCoverage() {
   try {
-    const layer = await uploadLayer()
-    const result = importFromNavigator(layer)
+    const fileData = await uploadFile()
+    let result
+
+    if (fileData.type === 'json') {
+      result = importFromNavigator(fileData.content as NavigatorLayer)
+    } else {
+      result = importFromXLSX(fileData.content as ArrayBuffer)
+    }
 
     // For APT layers: Add to APT groups list
     if (result.layerInfo.isAptLayer) {
       const aptId = `apt-${Date.now()}`
       const newAptGroup: AptGroup = {
         id: aptId,
-        name: result.layerInfo.name || 'Unnamed APT',
-        description: result.layerInfo.description || 'Imported APT layer',
+        name: result.layerInfo.name || `Unnamed ${fileData.type.toUpperCase()} Import`,
+        description: result.layerInfo.description || `Imported ${fileData.type.toUpperCase()} coverage data`,
         threatLevel: result.layerInfo.threatLevel,
         techniqueCount: result.layerInfo.coveredTechniques.length,
         techniques: result.layerInfo.aptTechniques,
@@ -239,17 +278,17 @@ async function importCoverage() {
       }
 
       aptGroups.value.push(newAptGroup)
-      activeAptIds.value.add(aptId)
+      // Don't automatically activate the APT group
 
-      alert(`APT Layer Imported: "${result.layerInfo.name}"\n` +
+      alert(`${fileData.type.toUpperCase()} Coverage Imported as APT Layer: "${result.layerInfo.name}"\n` +
             `Threat Level: ${result.layerInfo.threatLevel.toUpperCase()}\n` +
-            `${result.layerInfo.coveredTechniques.length} APT techniques identified\n\n` +
-            `Added to APT panel - manually select your actual sourcetypes to see coverage gaps`)
+            `${result.layerInfo.coveredTechniques.length} techniques identified\n\n` +
+            `Added to APT panel (not active). Enable it in the APT panel to overlay on the matrix, then select your actual sourcetypes to see coverage gaps.`)
     } else {
       // For normal layers: enable matching sourcetypes
       activeSourceIds.value = result.activeSourceIds
 
-      alert(`Successfully imported "${result.layerInfo.name}"\n` +
+      alert(`Successfully imported ${fileData.type.toUpperCase()} coverage data\n` +
             `Loaded ${result.activeSourceIds.size} sourcetypes covering ${result.layerInfo.coveredTechniques.length} techniques`)
     }
   } catch (error) {
@@ -419,14 +458,14 @@ onMounted(() => {
               <button
                 @click="exportCoverage"
                 class="px-2 py-1 text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded transition-colors"
-                title="Export to MITRE Navigator"
+                title="Export coverage (JSON or Excel)"
               >
                 <i class="fas fa-download mr-1"></i>Export
               </button>
               <button
                 @click="importCoverage"
                 class="px-2 py-1 text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded transition-colors"
-                title="Import from MITRE Navigator"
+                title="Import coverage (JSON or Excel)"
               >
                 <i class="fas fa-upload mr-1"></i>Import
               </button>
@@ -494,7 +533,7 @@ onMounted(() => {
         >
           <!-- Tactic headers -->
           <div
-            v-for="tactic in sortedTactics"
+            v-for="tactic in filteredTactics"
             :key="tactic.id"
             class="px-0.5 lg:px-1 py-1 lg:py-2 text-center border-b border-zinc-800"
           >
@@ -504,7 +543,7 @@ onMounted(() => {
 
           <!-- Technique columns -->
           <div
-            v-for="tactic in sortedTactics"
+            v-for="tactic in filteredTactics"
             :key="'col-' + tactic.id"
             class="flex flex-col gap-px p-0.5"
           >

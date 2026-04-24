@@ -23,7 +23,12 @@ const matchingSources = computed(() =>
   props.activeSources.filter(s => s.techniqueIds.includes(props.techniqueId))
 )
 
-const coverageCount = computed(() => matchingSources.value.length)
+const coverageCount = computed(() => {
+  const sourceCount = matchingSources.value.length
+  // Subtract the number of active APT groups targeting this technique
+  const aptThreatCount = props.aptInfo ? 1 : 0 // Each aptInfo represents one active APT group
+  return Math.max(0, sourceCount - aptThreatCount) // Don't go below 0
+})
 
 // Map OS environment values → sourcetype categories that provide coverage for that OS
 const osCategoryMap: Record<string, string[]> = {
@@ -125,16 +130,14 @@ function onMouseEnter() {
 }
 
 function onClick() {
-  if (isBlindSpot.value) {
-    window.open(mitreUrl.value, '_blank', 'noopener')
-  }
+  window.open(mitreUrl.value, '_blank', 'noopener')
 }
 </script>
 
 <template>
   <div
-    class="cell-hover relative rounded-sm overflow-hidden h-[14px] lg:h-[28px]"
-    :class="isBlindSpot ? 'cursor-pointer' : 'cursor-default'"
+    class="cell-hover relative rounded-sm overflow-hidden h-[14px] lg:h-[28px] cursor-pointer"
+    style="transition: background-color 1s ease-out, border-color 1s ease-out, outline-color 1s ease-out;"
     :style="{
       width: '100%',
       minWidth: '8px',
@@ -153,46 +156,57 @@ function onClick() {
     @mouseleave="emit('leave')"
     @click="onClick"
   >
-    <!-- Multi-OS split view -->
-    <template v-if="hasMultipleOs && inScope">
-      <div class="flex flex-col h-full w-full">
-        <div
-          v-for="seg in osCoverage"
-          :key="seg.os"
-          class="flex-1 flex items-center justify-center relative"
-          :style="{ backgroundColor: segmentColor(seg.covered) }"
-        >
-          <span
-            v-if="!seg.covered"
-            class="text-[6px] font-mono font-bold text-white/70 leading-none"
-          >{{ osLabels[seg.os] }}</span>
-        </div>
+    <!-- Multi-OS split view (conditionally displayed) -->
+    <div
+      v-show="hasMultipleOs && inScope"
+      class="flex flex-col h-full w-full absolute inset-0"
+    >
+      <div
+        v-for="seg in osCoverage"
+        :key="seg.os"
+        class="flex-1 flex items-center justify-center relative"
+        :style="{
+          backgroundColor: segmentColor(seg.covered),
+          transition: 'background-color 1s ease-out'
+        }"
+      >
+        <span
+          v-if="!seg.covered"
+          class="text-[6px] font-mono font-bold text-white/70 leading-none"
+        >{{ osLabels[seg.os] }}</span>
       </div>
-    </template>
+    </div>
 
-    <!-- Single view -->
-    <template v-else>
-      <!-- APT indicator -->
+    <!-- Single view (always rendered) -->
+    <div class="absolute inset-0" :style="{ opacity: hasMultipleOs && inScope ? 0 : 1, transition: 'opacity 1s ease-out' }">
+      <!-- Show technique ID if: no sources active, has coverage, OR is in scope (even if red blind spot) -->
+      <span
+        v-if="activeSources.length === 0 || coverageCount > 0 || inScope"
+        class="absolute inset-0 flex items-center justify-center text-[7px] font-mono font-semibold text-white leading-none"
+        style="transition: opacity 1s ease-out;"
+        :class="isBlindSpot ? 'underline decoration-white/40' : ''"
+      >
+        {{ techniqueId }}
+      </span>
+
+      <!-- Coverage count bubble in top-right corner -->
+      <span
+        v-if="coverageCount > 0"
+        class="absolute top-0.5 right-0.5 bg-white/90 text-zinc-900 text-[6px] font-bold rounded-full w-3 h-3 flex items-center justify-center leading-none shadow-lg border border-white/20 backdrop-blur-sm"
+        style="transition: opacity 1s ease-out, transform 1s ease-out;"
+        :title="`${coverageCount} sourcetype${coverageCount > 1 ? 's' : ''} detecting this technique`"
+      >
+        {{ coverageCount }}
+      </span>
+
+      <!-- APT indicator (moved to top-left to not conflict with count) -->
       <span
         v-if="aptInfo"
-        class="absolute top-0 right-0 text-[6px] text-red-400 leading-none p-[1px]"
+        class="absolute top-0 left-0 text-[6px] text-red-400 leading-none p-[1px]"
         title="APT Technique"
       >
         <i class="fas fa-exclamation-triangle"></i>
       </span>
-
-      <span
-        v-if="isBlindSpot"
-        class="absolute inset-0 flex items-center justify-center text-[7px] font-mono font-semibold text-white leading-none underline decoration-white/40"
-      >
-        {{ techniqueId }}
-      </span>
-      <span
-        v-else-if="coverageCount > 0"
-        class="absolute inset-0 flex items-center justify-center text-[8px] font-mono font-medium text-white/80 leading-none"
-      >
-        {{ aptInfo ? aptInfo.score : coverageCount }}
-      </span>
-    </template>
+    </div>
   </div>
 </template>
